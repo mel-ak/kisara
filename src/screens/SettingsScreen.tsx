@@ -5,11 +5,13 @@ import { ChevronRight, Wallet, User, Bell, Shield, Info, LogOut, Plus, Trash2, E
 import { useFinanceStore } from '../store/useFinanceStore';
 import { useSecurityStore } from '../store/useSecurityStore';
 import { useFocusEffect } from '@react-navigation/native';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
+import * as DocumentPicker from 'expo-document-picker';
+import { generateCsv, escapeCsvField } from '../utils/csvExport';
 
 const SettingsScreen = () => {
-    const { accounts, categories, transactions, addAccount, updateAccount, deleteAccount, addCategory, deleteCategory, clearAllData, fetchData } = useFinanceStore();
+    const { accounts, categories, transactions, addAccount, updateAccount, deleteAccount, addCategory, deleteCategory, clearAllData, fetchData, getAllTransactions, getBackupData, importBackup } = useFinanceStore();
     const { isBiometricEnabled, toggleBiometrics, lock, setPin } = useSecurityStore();
 
     useFocusEffect(
@@ -78,23 +80,29 @@ const SettingsScreen = () => {
   };
 
   const handleExport = async () => {
-    if (transactions.length === 0) {
+    const allTransactions = await getAllTransactions();
+    if (allTransactions.length === 0) {
         Alert.alert('No Data', 'You have no transactions to export.');
         return;
     }
     
     try {
-        let csv = 'Date,Type,Category,Amount,Account,Note\n';
-        transactions.forEach(t => {
-            csv += `${new Date(t.date).toLocaleDateString()},${t.type},${t.category?.name || ''},${t.amount},${t.account?.name || ''},${t.note || ''}\n`;
-        });
+        const headers = ['Date', 'Type', 'Category', 'Amount', 'Account', 'Note'];
+        const csv = generateCsv(allTransactions, headers, (t: any) => [
+            new Date(t.date).toLocaleDateString(),
+            t.type,
+            t.category?.name || 'Uncategorized',
+            t.amount,
+            t.account?.name || 'No Account',
+            t.note || ''
+        ]);
         
-        // @ts-ignore - documentDirectory exists at runtime in SDK 54 but type definitions may lag
-        const fileUri = (FileSystem as any).documentDirectory + 'kisara_export.csv';
-        // @ts-ignore - writeAsStringAsync exists at runtime
+        const timestamp = new Date().toISOString().split('T')[0];
+        const fileName = `kisara_export_${timestamp}.csv`;
+        const fileUri = (FileSystem as any).documentDirectory + fileName;
+        
         await FileSystem.writeAsStringAsync(fileUri, csv, { 
-            // @ts-ignore - EncodingType exists at runtime
-            encoding: (FileSystem as any).EncodingType.UTF8 
+            encoding: (FileSystem as any)?.EncodingType?.UTF8 || 'utf8'
         });
         
         if (await Sharing.isAvailableAsync()) {
@@ -103,8 +111,73 @@ const SettingsScreen = () => {
             Alert.alert('Export Failed', 'Sharing is not available on this device.');
         }
     } catch (e) {
-        console.error(e);
+        console.error('Export Error:', e);
         Alert.alert('Error', 'Failed to export data.');
+    }
+  };
+  
+  const handleExportAll = async () => {
+    try {
+        const backupData = await getBackupData();
+        const json = JSON.stringify(backupData, null, 2);
+        
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const fileName = `kisara_backup_all_${timestamp}.json`;
+        const fileUri = (FileSystem as any).documentDirectory + fileName;
+        
+        await FileSystem.writeAsStringAsync(fileUri, json, { 
+            encoding: (FileSystem as any)?.EncodingType?.UTF8 || 'utf8'
+        });
+        
+        if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(fileUri);
+        } else {
+            Alert.alert('Backup Failed', 'Sharing is not available on this device.');
+        }
+    } catch (e) {
+        console.error('Backup Error:', e);
+        Alert.alert('Error', 'Failed to backup all data.');
+    }
+  };
+
+  const handleImportData = async () => {
+    try {
+        const result = await DocumentPicker.getDocumentAsync({
+            type: 'application/json',
+            copyToCacheDirectory: true
+        });
+        
+        if (result.canceled) return;
+        
+        const file = result.assets[0];
+        const content = await FileSystem.readAsStringAsync(file.uri);
+        const data = JSON.parse(content);
+        
+        // Simple validation
+        if (!data.transactions || !data.accounts || !data.categories) {
+            Alert.alert('Invalid Backup', 'The selected file is not a valid Kisara backup.');
+            return;
+        }
+        
+        Alert.alert(
+            'Import Data',
+            'This will replace all your current data with the backup contents. Are you sure?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Import', style: 'destructive', onPress: async () => {
+                    try {
+                        await importBackup(data);
+                        Alert.alert('Success', 'Data imported successfully.');
+                    } catch (err) {
+                        console.error('Import process error:', err);
+                        Alert.alert('Import Failed', 'An error occurred during data restoration.');
+                    }
+                }}
+            ]
+        );
+    } catch (e) {
+        console.error('Import Picking Error:', e);
+        Alert.alert('Error', 'Failed to select or parse backup file.');
     }
   };
 
@@ -187,10 +260,25 @@ const SettingsScreen = () => {
         <Title style={styles.sectionTitle}>Data & Security</Title>
         <Card style={styles.card}>
             <List.Item
-                title="Export Data (CSV)"
-                left={props => <List.Icon {...props} icon="file-export" />}
+                title="Export Transactions (CSV)"
+                left={props => <List.Icon {...props} icon="file-delimited" />}
                 onPress={handleExport}
                 right={() => <Share2 size={20} color="#6200ee" style={styles.shareIcon} />}
+            />
+            <Divider />
+            <List.Item
+                title="Backup Everything (JSON)"
+                description="Export all accounts, categories, and history"
+                left={props => <List.Icon {...props} icon="database-export" />}
+                onPress={handleExportAll}
+                right={() => <Share2 size={20} color="#6200ee" style={styles.shareIcon} />}
+            />
+            <Divider />
+            <List.Item
+                title="Import Data (JSON)"
+                description="Restore from a previous backup"
+                left={props => <List.Icon {...props} icon="database-import" />}
+                onPress={handleImportData}
             />
             <Divider />
             <List.Item

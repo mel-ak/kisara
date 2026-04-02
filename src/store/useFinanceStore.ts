@@ -28,6 +28,9 @@ interface FinanceState {
   updateGoal: (id: number, data: Partial<typeof schema.goals.$inferInsert>) => Promise<void>;
   deleteGoal: (id: number) => Promise<void>;
   clearAllData: () => Promise<void>;
+  getAllTransactions: () => Promise<any[]>;
+  getBackupData: () => Promise<any>;
+  importBackup: (data: any) => Promise<void>;
 }
 
 export const useFinanceStore = create<FinanceState>((set, get) => ({
@@ -191,11 +194,109 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     await get().fetchData();
   },
   clearAllData: async () => {
-    await db.delete(schema.transactions);
-    await db.delete(schema.accounts);
-    await db.delete(schema.categories);
-    await db.delete(schema.budgets);
-    await db.delete(schema.goals);
-    await get().fetchData();
+    try {
+        await db.transaction(async (tx: any) => {
+            await tx.delete(schema.transactions);
+            await tx.delete(schema.budgets);
+            await tx.delete(schema.accounts);
+            await tx.delete(schema.categories);
+            await tx.delete(schema.goals);
+        });
+        await get().fetchData();
+    } catch (e) {
+        console.error('Clear All Data Error:', e);
+        throw e;
+    }
+  },
+  getAllTransactions: async () => {
+    return await db.query.transactions.findMany({
+      orderBy: [desc(schema.transactions.date)],
+      with: {
+        category: true,
+        account: true,
+      },
+    });
+  },
+  getBackupData: async () => {
+    const transactions = await db.query.transactions.findMany({
+        with: { category: true, account: true }
+    });
+    const accounts = await db.query.accounts.findMany();
+    const categories = await db.query.categories.findMany();
+    const budgets = await db.query.budgets.findMany({
+        with: { category: true }
+    });
+    const goals = await db.query.goals.findMany();
+    
+    return {
+        transactions,
+        accounts,
+        categories,
+        budgets,
+        goals,
+        exportedAt: new Date().toISOString(),
+        version: '1.0.0'
+    };
+  },
+  importBackup: async (data: any) => {
+    try {
+        await db.transaction(async (tx: any) => {
+            // Delete all existing data in correct order to avoid FK errors
+            await tx.delete(schema.transactions);
+            await tx.delete(schema.budgets);
+            await tx.delete(schema.accounts);
+            await tx.delete(schema.categories);
+            await tx.delete(schema.goals);
+            
+            // Re-insert from backup
+            // Categories first (dependencies)
+            if (data.categories?.length > 0) {
+                await tx.insert(schema.categories).values(data.categories);
+            }
+            // Accounts
+            if (data.accounts?.length > 0) {
+                const accountsToInsert = data.accounts.map((acc: any) => ({
+                    ...acc,
+                    createdAt: acc.createdAt ? new Date(acc.createdAt) : undefined,
+                }));
+                await tx.insert(schema.accounts).values(accountsToInsert);
+            }
+            // Transactions
+            if (data.transactions?.length > 0) {
+                const transactionsToInsert = data.transactions.map((t: any) => {
+                    const { category, account, ...rest } = t;
+                    return {
+                        ...rest,
+                        date: t.date ? new Date(t.date) : new Date(),
+                        createdAt: t.createdAt ? new Date(t.createdAt) : undefined,
+                    };
+                });
+                await tx.insert(schema.transactions).values(transactionsToInsert);
+            }
+            // Budgets
+            if (data.budgets?.length > 0) {
+                const budgetsToInsert = data.budgets.map((b: any) => {
+                    const { category, ...rest } = b;
+                    return rest;
+                });
+                await tx.insert(schema.budgets).values(budgetsToInsert);
+            }
+            // Goals
+            if (data.goals?.length > 0) {
+                const goalsToInsert = data.goals.map((g: any) => ({
+                    ...g,
+                    deadline: g.deadline ? new Date(g.deadline) : null,
+                    createdAt: g.createdAt ? new Date(g.createdAt) : undefined,
+                }));
+                await tx.insert(schema.goals).values(goalsToInsert);
+            }
+        });
+        
+        // Refresh the store
+        await get().fetchData();
+    } catch (e) {
+        console.error('Import Step Error:', e);
+        throw e;
+    }
   }
 }));
