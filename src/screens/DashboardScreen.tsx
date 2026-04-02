@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
 import { List, Card, Title, Text, FAB, useTheme, ProgressBar, IconButton } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { ArrowUpRight, ArrowDownLeft, Wallet, TrendingUp, Utensils, Bus, Home, Banknote, Briefcase, Plus } from 'lucide-react-native';
@@ -39,7 +39,14 @@ const DashboardScreen = () => {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Header with Quick Lock */}
         <View style={styles.headerRow}>
-          <Title style={styles.appTitle}>Kisara Finance</Title>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Image 
+              source={require('../../assets/icon.png')} 
+              style={{ width: 32, height: 32, borderRadius: 8 }} 
+              resizeMode="contain"
+            />
+            <Title style={styles.appTitle}>Kisara</Title>
+          </View>
           <IconButton
             icon="lock"
             mode="contained-tonal"

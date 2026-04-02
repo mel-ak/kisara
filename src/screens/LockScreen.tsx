@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Dimensions, Image } from 'react-native';
 import { Text, Title, IconButton, useTheme, Surface } from 'react-native-paper';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useSecurityStore } from '../store/useSecurityStore';
@@ -92,7 +92,15 @@ const LockScreen = () => {
         <View style={styles.container}>
             <View style={styles.header}>
                 <Surface style={styles.iconCircle} elevation={1}>
-                    {step === 'ENTER' ? <Lock color={theme.colors.primary} size={32} /> : <ShieldCheck color={theme.colors.primary} size={32} />}
+                    {step === 'ENTER' ? (
+                        <Image 
+                            source={require('../../assets/icon.png')} 
+                            style={{ width: 60, height: 60, borderRadius: 30 }} 
+                            resizeMode="contain"
+                        />
+                    ) : (
+                        <ShieldCheck color={theme.colors.primary} size={32} />
+                    )}
                 </Surface>
                 <Title style={styles.title}>
                     {step === 'ENTER' ? 'Welcome Back' : step === 'SET' ? 'Set Secure PIN' : 'Confirm PIN'}
