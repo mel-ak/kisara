@@ -21,10 +21,21 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.melak.kisara"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-sqlite",
+      "@react-native-community/datetimepicker",
+      "expo-secure-store"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "031ae5a9-fbd0-4026-876f-47fe6555bfe6"
+      }
     }
   }
 }
