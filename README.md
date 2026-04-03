@@ -1,4 +1,4 @@
-# 🌘 Kisara - Smart Finance Tracker
+# Kisara - Smart Finance Tracker
 
 ![Kisara Banner](assets/icon.png)
 
