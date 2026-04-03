@@ -1,6 +1,6 @@
 # 🌘 Kisara - Smart Finance Tracker
 
-![Kisara Banner](assets/banner.png)
+![Kisara Banner](assets/icon.png)
 
 **Kisara** is a modern, high-performance personal finance management application built for privacy, speed, and beautiful data visualization. Developed with Expo 54 and React Native 0.81, it provides an offline-first experience with robust local security.
 
